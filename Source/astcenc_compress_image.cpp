@@ -3,8 +3,9 @@
 #include "stb_image.h"
 #define WUFFS_IMPLEMENTATION
 #include "wuffs-v0.3.c"
-
-
+#include <chrono>
+#include <fstream>
+#include "astcenccli_internal.h"
 #include <vector>
 #include <cstring>
 #include <cstdlib>
@@ -16,8 +17,14 @@
 ASTCENC_COMPRESS_PUBLIC astcenc_error compress_astc(uint8_t *input_image_raw,size_t image_len,char* format,
                                        uint8_t *output_image_raw, uint32_t width,
                                        uint32_t height, uint32_t block_width,
-                                       uint32_t block_height, float quality,uint32_t is_srgb)
+                                       uint32_t block_height, float quality,uint32_t is_srgb,unsigned int repeat_count)
 {
+
+ // 在函数开始时声明变量
+    std::chrono::high_resolution_clock::time_point start;
+    std::chrono::high_resolution_clock::time_point end;
+    std::chrono::duration<double, std::milli> diff;
+    std::ofstream log_file;
 
   astcenc_profile profile = is_srgb ? ASTCENC_PRF_LDR_SRGB : ASTCENC_PRF_LDR;
   astcenc_config config{};
@@ -27,16 +34,23 @@ ASTCENC_COMPRESS_PUBLIC astcenc_error compress_astc(uint8_t *input_image_raw,siz
   {
     return result;
   }
-  //
-  astcenc_context *codec_context;
-  result = astcenc_context_alloc(&config, 1, &codec_context);
+
+  astcenc_context* codec_context;
+//  astcenc_context *codec_context;
+  result = astcenc_context_alloc(&config, repeat_count, &codec_context);
   if (result != ASTCENC_SUCCESS)
   {
     return result;
   }
-  astcenc_image* uncompressed_image = load_ncimage_from_memory(format, input_image_raw, image_len, 1);
-//  return ASTCENC_ERR_BAD_BLOCK_SIZE;
 
+   start = std::chrono::high_resolution_clock::now();
+  astcenc_image* uncompressed_image = load_ncimage_from_memory(format, input_image_raw, image_len, 1);
+   end = std::chrono::high_resolution_clock::now();
+  diff = end-start;
+    log_file.open("log.txt", std::ios_base::app);// append instead of overwrite
+    log_file << "uncompressed_image took " << diff.count() << " milli seconds.\n size is " << image_len << "\n";
+
+//  return ASTCENC_ERR_BAD_BLOCK_SIZE;
 //  astcenc_image uncompressed_image{width, height, 1, ASTCENC_TYPE_U8,
 //                                   reinterpret_cast<void **>(&input_image_raw)};
   astcenc_swizzle swz_encode{ASTCENC_SWZ_R, ASTCENC_SWZ_G, ASTCENC_SWZ_B,
@@ -47,16 +61,48 @@ ASTCENC_COMPRESS_PUBLIC astcenc_error compress_astc(uint8_t *input_image_raw,siz
  unsigned int zblocks = 1;
   size_t comp_len = xblocks * yblocks * zblocks * 16;// 计算所需的输出缓冲区大小
 
-  std::vector<uint8_t> res(sizeof(astcenc_header) + comp_len);
-  uint8_t* comp_data = res.data() + sizeof(astcenc_header);
-  result = astcenc_compress_image(codec_context, uncompressed_image, &swz_encode,
-                             comp_data, comp_len, 0);
+//  std::vector<uint8_t> res(sizeof(astcenc_header) + comp_len);
+  uint8_t* comp_data = output_image_raw + sizeof(astcenc_header);
+   start = std::chrono::high_resolution_clock::now();
 
-  astcenc_context_free(codec_context);
+    compression_workload work;
+    work.context = codec_context;
+    work.image = uncompressed_image;
+    work.swizzle = swz_encode;
+    work.data_out = comp_data;
+    work.data_len = comp_len;
+    work.error = ASTCENC_SUCCESS;
+   log_file << "repeat_count is " << repeat_count << "\n";
+
+    if (repeat_count > 1){
+
+       log_file.open("log.txt", std::ios_base::app);// append instead of overwrite
+       log_file << "launch_threads is " << repeat_count <<  "\n";
+        launch_threads("Compression", repeat_count, compression_workload_runner_new, &work);
+        result = work.error;
+//   			return result;
+    }else{
+        log_file.open("log.txt", std::ios_base::app);// append instead of overwrite
+          log_file << "astcenc_compress_image is " << repeat_count <<  "\n";
+          result = astcenc_compress_image(work.context, work.image, &work.swizzle,
+          work.data_out, work.data_len, 0);
+     }
+     log_file.open("log.txt", std::ios_base::app);// append instead of overwrite
+      end = std::chrono::high_resolution_clock::now();
+      diff = end-start;
+       log_file << "astcenc_compress_image took " << diff.count() << " milli seconds.\n size is " << image_len << "\n";
+
+      start = std::chrono::high_resolution_clock::now();
+       astcenc_context_free(codec_context);
+       end = std::chrono::high_resolution_clock::now();
+        diff = end-start;
+     //   log_file.open("log.txt", std::ios_base::app);// append instead of overwrite
+        log_file << "astcenc_context_free took " << diff.count() << " milli seconds.\n size is " << image_len << "\n";
+
     // 获取header头信息
-    astcenc_header &hdr = *reinterpret_cast<astcenc_header *>(res.data());
+    astcenc_header &hdr = *reinterpret_cast<astcenc_header *>(output_image_raw);
     hdr = get_astcenc_header(uncompressed_image, block_width, block_height, 1);
-    memcpy(output_image_raw, res.data(), res.size());
+
   return result;
 }
 
@@ -107,8 +153,12 @@ ASTCENC_COMPRESS_PUBLIC astcenc_error compress_astc(uint8_t *input_image_raw,siz
 //    }
 //    else
 //    {
-
+        auto start = std::chrono::high_resolution_clock::now();
         uint8_t* data = stbi_load_from_memory(buffer, (int)size, &dim_x, &dim_y, nullptr, STBI_rgb_alpha);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> diff = end-start;
+        std::ofstream log_file("log.txt", std::ios_base::app); // append instead of overwrite
+        log_file << "stbi_load_from_memory took " << diff.count() << " milli seconds.\n size is " << size << "\n";
         if (data)
         {
             astcenc_image* img = astc_img_from_unorm8x4_array(data, dim_x, dim_y, y_flip);
@@ -218,12 +268,18 @@ ASTCENC_COMPRESS_PUBLIC astcenc_error compress_astc(uint8_t *input_image_raw,siz
            	// We need to modify the logic to determine the appropriate loader function.
             astcenc_image* result = NULL;
             bool y_flip_bool = y_flip == 0  ? false : true;
+            auto start = std::chrono::high_resolution_clock::now();
            	// Scan through descriptors until a matching loader is found
            	if (strcmp(eptr, "PNG") == 0){
            	    result = load_png_with_wuffs_from_memory(data, size, y_flip_bool);
            	}else{
            	    result = load_image_from_memory(data, size, y_flip_bool);
             }
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> diff = end-start;
+            std::ofstream log_file("log.txt", std::ios_base::app); // append instead of overwrite
+            log_file << "load_ncimage_from_memory took " << diff.count() << " milli seconds.\n size is " << size << "\n";
+
 //           	for (unsigned int i = 0; i < loader_descr_count_astc; i++)
 //           	{
 //           		// We need to modify the condition to choose the appropriate loader function.
@@ -307,4 +363,38 @@ ASTCENC_COMPRESS_PUBLIC astcenc_error compress_astc(uint8_t *input_image_raw,siz
 	}
 
 	return img;
+}
+
+
+/**
+ * @brief Runner callback function for a compression worker thread.
+ *
+ * @param thread_count   The number of threads in the worker pool.
+ * @param thread_id      The index of this thread in the worker pool.
+ * @param payload        The parameters for this thread.
+ */
+ void compression_workload_runner_new(
+	int thread_count,
+	int thread_id,
+	void* payload
+) {
+	(void)thread_count;
+
+	std::ofstream log_file;
+            	log_file.open("log.txt", std::ios_base::app);// append instead of overwrite
+                    log_file << "compression_workload_runner_new thread_id " << thread_id << "\n";
+                    log_file << "compression_workload_runner_new thread_count " << thread_count << "\n";
+                    log_file << "compression_workload_runner_new payload " << payload << "\n";
+	compression_workload* work = static_cast<compression_workload*>(payload);
+	log_file << "compression_workload_runner_new work " << work << "\n";
+	astcenc_error error = astcenc_compress_image(
+	                       work->context, work->image, &work->swizzle,
+	                       work->data_out, work->data_len, thread_id);
+log_file << "compression_workload_runner_new error " << error << "\n";
+	// This is a racy update, so which error gets returned is a random, but it
+	// will reliably report an error if an error occurs
+	if (error != ASTCENC_SUCCESS)
+	{
+		work->error = error;
+	}
 }

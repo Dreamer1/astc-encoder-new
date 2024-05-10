@@ -409,4 +409,30 @@ int astcenc_main(
 	int argc,
 	char **argv);
 
+/**
+ * @brief Compression workload definition for worker threads.
+ */
+struct compression_workload
+{
+	astcenc_context* context;
+	astcenc_image* image;
+	astcenc_swizzle swizzle;
+	uint8_t* data_out;
+	size_t data_len;
+	astcenc_error error;
+};
+
+/**
+ * @brief Decompression workload definition for worker threads.
+ */
+struct decompression_workload
+{
+	astcenc_context* context;
+	uint8_t* data;
+	size_t data_len;
+	astcenc_image* image_out;
+	astcenc_swizzle swizzle;
+	astcenc_error error;
+};
+
 #endif

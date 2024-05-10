@@ -82,6 +82,7 @@ if(${ASTCENC_SHAREDLIB})
             astcenc_decompress_symbolic.cpp
             astcenc_diagnostic_trace.cpp
             astcenc_entry.cpp
+            astcenccli_platform_dependents.cpp
             astcenc_compress_image.cpp
             add.cpp
             astcenc_find_best_partitioning.cpp

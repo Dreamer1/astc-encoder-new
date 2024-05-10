@@ -32,6 +32,7 @@ target_sources(${ASTCENC_TEST}
         test_simd.cpp
         test_softfloat.cpp
         test_decode.cpp
+        test_compress.cpp
         ../astcenc_mathlib_softfloat.cpp)
 
 target_include_directories(${ASTCENC_TEST}

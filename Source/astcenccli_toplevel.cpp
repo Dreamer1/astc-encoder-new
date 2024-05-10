@@ -136,31 +136,6 @@ static const mode_entry modes[] {
 	{"-version", ASTCENC_OP_VERSION,    ASTCENC_PRF_HDR}
 };
 
-/**
- * @brief Compression workload definition for worker threads.
- */
-struct compression_workload
-{
-	astcenc_context* context;
-	astcenc_image* image;
-	astcenc_swizzle swizzle;
-	uint8_t* data_out;
-	size_t data_len;
-	astcenc_error error;
-};
-
-/**
- * @brief Decompression workload definition for worker threads.
- */
-struct decompression_workload
-{
-	astcenc_context* context;
-	uint8_t* data;
-	size_t data_len;
-	astcenc_image* image_out;
-	astcenc_swizzle swizzle;
-	astcenc_error error;
-};
 
 /**
  * @brief Callback emitting a progress bar
@@ -2069,9 +2044,16 @@ int astcenc_main(
 	// Load the uncompressed input file if needed
 	if (operation & ASTCENC_STAGE_LD_NCOMP)
 	{
+	printf("load_uncomp_file\n");
+            printf("===========\n");
+            printf("\n");
+            double load_uncomp_file_start = get_time();
 		image_uncomp_in = load_uncomp_file(
 		    input_filename.c_str(), cli_config.array_size, cli_config.y_flip,
 		    image_uncomp_in_is_hdr, image_uncomp_in_component_count);
+		    double total_time1 = (get_time() - load_uncomp_file_start);
+		printf("    load_uncomp_file time:                %8.4f s\n", total_time1);
+		printf("\n\n");
 		if (!image_uncomp_in)
 		{
 			print_error("ERROR: Failed to load uncompressed image file\n");
@@ -2163,7 +2145,17 @@ int astcenc_main(
 		work.data_out = buffer;
 		work.data_len = buffer_size;
 		work.error = ASTCENC_SUCCESS;
-
+		printf("work\n");
+        printf("===========\n");
+        printf("\n");
+		printf("context: %p\n", (void *)work.context);
+        printf("image: %p\n", (void *)work.image);
+        // Assuming astcenc_swizzle is an enum or integral type
+//        printf("swizzle: %d\n", (int)work.swizzle);
+        printf("data_out: %p\n", (void *)work.data_out);
+        printf("data_len: %zu\n", work.data_len);
+        printf("error: %d\n", work.error);
+        printf("\n\n");
 		// Only launch worker threads for multi-threaded use - it makes basic
 		// single-threaded profiling and debugging a little less convoluted
 		double start_compression_time = get_time();
@@ -2199,7 +2191,8 @@ int astcenc_main(
 			best_compression_time = astc::min(iter_time, best_compression_time);
 		}
 		total_compression_time = get_time() - start_compression_time;
-
+printf("    total_compression_time time:                %8.4f s\n", total_compression_time);
+		printf("\n\n");
 		if (work.error != ASTCENC_SUCCESS)
 		{
 			print_error("ERROR: Codec compress failed: %s\n", astcenc_get_error_string(work.error));

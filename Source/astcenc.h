@@ -860,7 +860,7 @@ ASTCENC_PUBLIC const char* astcenc_get_error_string(
      // 定义加载器描述符数组
 ASTCENC_PUBLIC astcenc_error compress_astc(uint8_t *in,size_t image_len,char* format, uint8_t *out, uint32_t width,
                                 uint32_t height, uint32_t block_width,
-                                uint32_t block_height,float quality, uint32_t is_srgb);
+                                uint32_t block_height,float quality, uint32_t is_srgb,unsigned int repeat_count);
 
  typedef struct astcenc_header
     {
@@ -906,6 +906,9 @@ ASTCENC_PUBLIC astcenc_image* alloc_image(
         const char* ending2;
         astcenc_image* (*loader_func)(const uint8_t*, size_t, bool);
     } loader_desc;
-
-
+   void compression_workload_runner_new(
+	int thread_count,
+	int thread_id,
+	void* payload
+);
 #endif
