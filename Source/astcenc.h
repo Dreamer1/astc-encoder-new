@@ -911,4 +911,5 @@ ASTCENC_PUBLIC astcenc_image* alloc_image(
 	int thread_id,
 	void* payload
 );
+int get_cpu_count_new();
 #endif

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
+#include <unistd.h>
 
 #define ASTCENC_COMPRESS_PUBLIC extern "C" __attribute__ ((visibility ("default")))
 
@@ -36,6 +37,7 @@ ASTCENC_COMPRESS_PUBLIC astcenc_error compress_astc(uint8_t *input_image_raw,siz
   }
 
   astcenc_context* codec_context;
+  repeat_count = get_cpu_count_new();
 //  astcenc_context *codec_context;
   result = astcenc_context_alloc(&config, repeat_count, &codec_context);
   if (result != ASTCENC_SUCCESS)
@@ -345,7 +347,10 @@ ASTCENC_COMPRESS_PUBLIC astcenc_error compress_astc(uint8_t *input_image_raw,siz
 
 	return img;
 }
-
+int get_cpu_count_new()
+{
+	return static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
+}
 
 /**
  * @brief Runner callback function for a compression worker thread.
